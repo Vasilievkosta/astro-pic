@@ -2,9 +2,8 @@
   "name": "server",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "api/bot.js",
   "scripts": {
-    "start": "node --env-file=.env index.js",
     "webhook:set": "node --env-file=.env scripts/set-webhook.js",
     "webhook:info": "node --env-file=.env scripts/get-webhook-info.js"
   },
@@ -20,6 +19,6 @@
   },
   "type": "module",
   "dependencies": {
-    "fastify": "^5.12.3"
+    "grammy": "^1.46.0"
   }
 }
