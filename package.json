@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node --env-file=.env index.js"
+    "start": "node --env-file=.env index.js",
+    "webhook:set": "node --env-file=.env scripts/set-webhook.js",
+    "webhook:info": "node --env-file=.env scripts/get-webhook-info.js"
   },
   "keywords": [],
   "author": "",
