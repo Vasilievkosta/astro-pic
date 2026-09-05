@@ -1,8 +1,10 @@
-import { Bot, Keyboard } from "grammy"
-import { translate } from "@vitalets/google-translate-api"
+import { Bot } from "grammy"
+import { getApod } from "../application/getApod.js"
+import { translateToRussian } from "../infrastructure/translator.js"
+import { getExplanation, getTranslation, saveExplanation, saveTranslation } from "./chatState.js"
+import { getMenuKeyboard } from "./keyboard.js"
 
 const botToken = process.env.BOT_TOKEN
-const nasaKey = process.env.NASA_KEY
 
 if (!botToken) {
   throw new Error("BOT_TOKEN is not set")
@@ -10,36 +12,7 @@ if (!botToken) {
 
 export const bot = new Bot(botToken)
 
-let lastExplanation = null
-let lastTranslation = null
-
-function getMenuKeyboard() {
-  return new Keyboard()
-    .text("📷 Фото дня")
-    .row()
-    .text("🚀 Фото из архива NASA 🔭")
-    .row()
-    .text("📒 Описание фото (EN)")
-    .row()
-    .text("🌐 Перевод описания (RU)")
-    .row()
-    .text("ℹ️ О боте")
-    .resized()
-}
-
-async function getApod(ctx, type = "today") {
-  if (!nasaKey) {
-    throw new Error("NASA_KEY is not set")
-  }
-
-  const url = new URL("https://api.nasa.gov/planetary/apod")
-  url.searchParams.set("api_key", nasaKey)
-  url.searchParams.set("thumbs", "true")
-
-  if (type === "random") {
-    url.searchParams.set("count", "1")
-  }
-
+async function sendApod(ctx, type = "today") {
   let loadingMsgSent = false
 
   const timer = setTimeout(async () => {
@@ -49,36 +22,30 @@ async function getApod(ctx, type = "today") {
   }, 3000)
 
   try {
-    const response = await fetch(url)
+    const item = await getApod(type)
     clearTimeout(timer)
 
     if (!loadingMsgSent) {
       await ctx.replyWithChatAction("upload_photo")
     }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("Ошибка NASA API:", errorText)
+    if (!item) {
       await ctx.reply("Не удалось получить фото 😢")
       return
     }
 
-    const data = await response.json()
-    const item = Array.isArray(data) ? data[0] : data
+    saveExplanation(ctx.chat.id, item.explanation)
 
-    lastExplanation = item.explanation
-    lastTranslation = null
-
-    if (item.media_type === "image") {
+    if (item.mediaType === "image") {
       await ctx.replyWithPhoto(item.url, {
         caption: `${item.title}\nDate: ${item.date}`,
       })
       return
     }
 
-    if (item.media_type === "video") {
-      if (item.thumbnail_url) {
-        await ctx.replyWithPhoto(item.thumbnail_url, {
+    if (item.mediaType === "video") {
+      if (item.thumbnailUrl) {
+        await ctx.replyWithPhoto(item.thumbnailUrl, {
           caption: `${item.title}\n\nВидео 🎥: ${item.url}\n🗓️ ${item.date}\nℹ️ В Telegram Web может быть ошибка 153. Открой напрямую в YouTube 👆`,
         })
         return
@@ -90,7 +57,7 @@ async function getApod(ctx, type = "today") {
       return
     }
 
-    console.warn("Неизвестный тип медиа:", item.media_type, item)
+    console.warn("Неизвестный тип медиа:", item.mediaType, item)
     await ctx.reply(
       "NASA прислало неизвестный тип медиа 🤔\n" + "Попробуй запросить ещё раз 📷 Фото дня или 🔭 Фото из архива.",
     )
@@ -114,20 +81,23 @@ bot.command("start", async (ctx) => {
 
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text
+  const chatId = ctx.chat.id
 
   if (text === "фото" || text === "📷 Фото дня") {
-    await getApod(ctx, "today")
+    await sendApod(ctx, "today")
     return
   }
 
   if (text === "🚀 Фото из архива NASA 🔭") {
-    await getApod(ctx, "random")
+    await sendApod(ctx, "random")
     return
   }
 
   if (text === "📒 Описание фото (EN)") {
-    if (lastExplanation) {
-      await ctx.reply(lastExplanation)
+    const explanation = getExplanation(chatId)
+
+    if (explanation) {
+      await ctx.reply(explanation)
     } else {
       await ctx.reply("Сначала запроси фото 📷, потом будет доступно описание.")
     }
@@ -135,20 +105,24 @@ bot.on("message:text", async (ctx) => {
   }
 
   if (text === "🌐 Перевод описания (RU)") {
-    if (!lastExplanation) {
+    const explanation = getExplanation(chatId)
+
+    if (!explanation) {
       await ctx.reply("Сначала запроси фото 📷, потом будет доступен перевод.")
       return
     }
 
-    if (lastTranslation) {
-      await ctx.reply(lastTranslation)
+    const translation = getTranslation(chatId)
+
+    if (translation) {
+      await ctx.reply(translation)
       return
     }
 
     try {
-      const result = await translate(lastExplanation, { to: "ru" })
-      lastTranslation = result.text
-      await ctx.reply(lastTranslation)
+      const translatedText = await translateToRussian(explanation)
+      saveTranslation(chatId, translatedText)
+      await ctx.reply(translatedText)
     } catch (error) {
       console.error("Ошибка перевода:", error)
       await ctx.reply("Ошибка перевода 😢")
