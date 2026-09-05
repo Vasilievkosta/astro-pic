@@ -4,8 +4,10 @@
   "description": "",
   "main": "api/bot.js",
   "scripts": {
+    "dev": "node --env-file=.env src/local.js",
     "webhook:set": "node --env-file=.env scripts/set-webhook.js",
-    "webhook:info": "node --env-file=.env scripts/get-webhook-info.js"
+    "webhook:info": "node --env-file=.env scripts/get-webhook-info.js",
+    "webhook:delete": "node --env-file=.env scripts/delete-webhook.js"
   },
   "keywords": [],
   "author": "",
